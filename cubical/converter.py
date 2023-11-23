@@ -69,4 +69,20 @@ class GrayscaleConverter(BaseConverter):
 
     def convert_dataset(self) -> List[Union[torch.Tensor, np.ndarray]]:
         """Perform the transform to total dataset."""
-        return [(self.convert(image), target) for image, target in self.dataset]
+        
+        # Check if the image is a PyTorch tensor
+        if isinstance(self.dataset, torch.Tensor):
+            # For PyTorch tensor
+            R, G, B = self.dataset[:, 0, :, :], self.dataset[:, 1, :, :], self.dataset[:, 2, :, :]
+            grayscale = self.x1 * R + self.x2 * G + self.x3 * B
+            return grayscale.unsqueeze(1)  # Adding a channel dimension for consistency
+
+        # Check if the image is a numpy array
+        elif isinstance(self.dataset, np.ndarray):
+            # For numpy array
+            R, G, B = self.dataset[:, :, :, 0], self.dataset[:, :, :, 1], self.dataset[:, :, :, 2]
+            grayscale = self.x1 * R + self.x2 * G + self.x3 * B
+            return grayscale[:, :, np.newaxis]  # Adding a channel dimension for consistency
+
+        else:
+            raise TypeError("Input type not supported. Only supports PyTorch tensor or numpy array.")
