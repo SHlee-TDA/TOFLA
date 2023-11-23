@@ -40,7 +40,13 @@ class GrayscaleConverter(BaseConverter):
         self.x1 = x1
         self.x2 = x2
         self.x3 = x3
-        
+    
+    def set_weights(self, x1, x2, x3):
+        """Set new weights for the RGB channels"""
+        self.x1 = x1
+        self.x2 = x2
+        self.x3 = x3
+    
     def convert(self, image: Union[torch.Tensor, np.ndarray]) -> Union[torch.Tensor, np.ndarray]:
         """The method to convert 3 channel images to 1 channel using the grayscale conversion formula."""
 
@@ -55,7 +61,7 @@ class GrayscaleConverter(BaseConverter):
         elif isinstance(image, np.ndarray):
             # For numpy array
             R, G, B = image[:, :, 0], image[:, :, 1], image[:, :, 2]
-            grayscale = 0.299 * R + 0.587 * G + 0.114 * B
+            grayscale = self.x1 * R + self.x2 * G + self.x3 * B
             return grayscale[:, :, np.newaxis]  # Adding a channel dimension for consistency
 
         else:
