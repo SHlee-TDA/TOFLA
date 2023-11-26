@@ -20,7 +20,7 @@ class BaseConverter(ABC):
     
 
 class GrayscaleConverter(BaseConverter):
-    def __init__(self, x1=0.299, x2=0.587, x3=0.114):
+    def __init__(self, dataset, x1=0.299, x2=0.587, x3=0.114):
         """
         Initializes the GrayscaleConverter with weights for RGB channels.
 
@@ -37,6 +37,7 @@ class GrayscaleConverter(BaseConverter):
         three primary colors (red, green, blue), which is why the weight for green is the highest. 
         This conversion is widely used in computer vision and image processing.
         """
+        super().__init__(dataset)
         self.x1 = x1
         self.x2 = x2
         self.x3 = x3
@@ -54,14 +55,14 @@ class GrayscaleConverter(BaseConverter):
         if isinstance(image, torch.Tensor):
             # For PyTorch tensor
             R, G, B = image[0, :, :], image[1, :, :], image[2, :, :]
-            grayscale = self.x1 * R + self.x2 * G + self.x3 * B
+            grayscale = (self.x1 * R + self.x2 * G + self.x3 * B) / 3
             return grayscale.unsqueeze(0)  # Adding a channel dimension for consistency
 
         # Check if the image is a numpy array
         elif isinstance(image, np.ndarray):
             # For numpy array
             R, G, B = image[:, :, 0], image[:, :, 1], image[:, :, 2]
-            grayscale = self.x1 * R + self.x2 * G + self.x3 * B
+            grayscale = (self.x1 * R + self.x2 * G + self.x3 * B) / 3
             return grayscale[:, :, np.newaxis]  # Adding a channel dimension for consistency
 
         else:
@@ -74,14 +75,14 @@ class GrayscaleConverter(BaseConverter):
         if isinstance(self.dataset, torch.Tensor):
             # For PyTorch tensor
             R, G, B = self.dataset[:, 0, :, :], self.dataset[:, 1, :, :], self.dataset[:, 2, :, :]
-            grayscale = self.x1 * R + self.x2 * G + self.x3 * B
+            grayscale = (self.x1 * R + self.x2 * G + self.x3 * B) / 3
             return grayscale.unsqueeze(1)  # Adding a channel dimension for consistency
 
         # Check if the image is a numpy array
         elif isinstance(self.dataset, np.ndarray):
             # For numpy array
             R, G, B = self.dataset[:, :, :, 0], self.dataset[:, :, :, 1], self.dataset[:, :, :, 2]
-            grayscale = self.x1 * R + self.x2 * G + self.x3 * B
+            grayscale = (self.x1 * R + self.x2 * G + self.x3 * B) / 3
             return grayscale[:, :, np.newaxis]  # Adding a channel dimension for consistency
 
         else:

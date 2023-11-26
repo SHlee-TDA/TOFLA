@@ -18,7 +18,7 @@ from gudhi.sklearn.cubical_persistence import CubicalPersistence
 from gudhi.representations.vector_methods import Entropy
 from tqdm import tqdm
 
-from converter import BaseConverter
+from .converter import BaseConverter
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -58,8 +58,8 @@ class Vectorization:
     def __init__(self,
                 dataset,
                 filtration: BaseConverter,
-                persistence,
-                vectorization
+                persistence = persistence_1d,
+                vectorization = vectorization
                 ):
 
         """
@@ -92,21 +92,21 @@ class Vectorization:
         start_time = time.time()
 
         # Step 1 : Convert sample to filtered image
-        logger.info("Starting filtration...")
+        #logger.info("Starting filtration...")
         filtered_dataset = self.filtration.convert_dataset()
         filtered_images = np.array([image[0].numpy() for image in filtered_dataset])
         
         # Step 2 : Compute Persistence Diagrams
-        logger.info("Computing persistence diagrams...")
+        #logger.info("Computing persistence diagrams...")
         persistence_diagrams = self.persistence.fit_transform(filtered_images)
         normalized_diagrams = [np.where(arr == np.inf, 1.0, arr) for arr in persistence_diagrams]
         
         # Step 3 : Vectorize Persistence Diagrams.
-        logger.info("Vectorizing persistence diagrams")
+        #logger.info("Vectorizing persistence diagrams")
         vectors = self.vectorization.fit_transform(normalized_diagrams)
         self.vectors = vectors
         
         end_time = time.time()
-        logger.info(f"Total transformation time: {end_time - start_time} seconds")
+        #logger.info(f"Total transformation time: {end_time - start_time} seconds")
         return vectors
 
