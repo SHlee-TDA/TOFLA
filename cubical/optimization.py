@@ -1,93 +1,123 @@
+"""
+optimization.py
+
+This script defines classes for optimization processes in the context of topological data analysis (TDA).
+It includes an abstract base class, OptimizationProcess, and concrete implementations such as GridSearch and RandomSearch.
+These classes are designed to find the optimal parameters that maximize entropy, derived from TDA calculations on image datasets.
+"""
 from abc import ABC, abstractmethod
 import logging
+from typing import Tuple, Optional
 
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
-from gudhi.sklearn.cubical_persistence import CubicalPersistence
 
 from .converter import GrayscaleConverter
-from .entropy_calculator import Vectorization
+from .entropy_calculator import EntropyCalculator
 
-
-# 로깅 설정
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-persistence_0d = CubicalPersistence(
-    homology_dimensions=0,
-    input_type='vertices',
-    homology_coeff_field=2,
-    n_jobs=-1
-)
-
-persistence_1d = CubicalPersistence(
-    homology_dimensions=1,
-    input_type='vertices',
-    homology_coeff_field=2,
-    n_jobs=-1
-)
-
-
 class OptimizationProcess(ABC):
-    def __init__(self, dataset):
+    """
+    An abstract base class for optimization processes in topological data analysis.
+
+    This class serves as a foundation for specific optimization strategies, like grid search or random search,
+    aimed at finding the optimal parameters for image data transformations to maximize entropy.
+
+    Attributes:
+        dataset: The dataset on which the optimization process is performed.
+        homology_dimension (int): The specific homology dimension used for calculating entropy in TDA.
+        best_params (Optional[Tuple[float, float, float]]): The best found parameters for maximizing entropy.
+        max_entropy (float): The maximum entropy value found during optimization.
+
+    Methods:
+        optimize(): Abstract method to be implemented by subclasses, defining the optimization strategy.
+    """
+    def __init__(self, dataset, homology_dimension: int):
         self.dataset = dataset
-        self.best_params = None
-        self.max_entropy = -float('inf')
+        self.homology_dimension = homology_dimension
+        self.best_params: Optional[Tuple[float, float, float]] = None
+        self.max_entropy: float = -float('inf')
 
     @abstractmethod
-    def optimize(self):
+    def optimize(self) -> Tuple[Optional[Tuple[float, float, float]], float]:
         pass
     
 
 class GridSearch(OptimizationProcess):
-    def __init__(self, dataset, steps=10):
-        super().__init__(dataset)
-        self.steps = steps  # Grid search에서 사용할 각 차원의 스텝 수
+    """
+    A grid search optimization process for finding the best parameters that maximize entropy.
 
-    def optimize(self):
-        fig = plt.figure()
-        ax = fig.add_subplot(111, projection='3d')
+    This class performs an exhaustive search over a specified parameter space to find the 
+    combination of parameters that yields the highest entropy in the resulting data transformation.
+
+    Attributes:
+        dataset: The dataset to be processed.
+        homology_dimension: The homology dimension used for entropy calculation.
+        steps (int): The number of steps to divide the parameter space for each parameter.
+    """
+
+    def __init__(self, dataset, homology_dimension: int, steps: int = 10):
+        """
+        Initialize the grid search optimization process.
+
+        Args:
+            dataset: The dataset to be optimized.
+            homology_dimension (int): The homology dimension to be used for entropy calculation.
+            steps (int): The number of intervals to divide the range [0, 1] for each parameter.
+        """
+        super().__init__(dataset, homology_dimension)
+        self.steps = steps
+        self.entropy_data = None
         
-        # 엔트로피 값을 저장할 리스트
-        entropies = []
-        
-        # Grid search 로직
-        for x1 in np.linspace(0, 1, num=self.steps):
-            for x2 in np.linspace(0, 1, num=self.steps):
-                for x3 in np.linspace(0, 1, num=self.steps):
-                    # GrayscaleConverter 인스턴스 생성 및 파라미터 설정
-                    converter = GrayscaleConverter(dataset=self.dataset, x1=x1, x2=x2, x3=x3)
+    def optimize(self) -> Tuple[Optional[Tuple[float, float, float]], float]:
+        """
+        Perform the grid search optimization.
 
-                    # Vectorization 인스턴스 생성 및 데이터셋 변환
-                    vectorizer_0d = Vectorization(self.dataset, converter, persistence_0d)
-                    vectorizer_1d = Vectorization(self.dataset, converter, persistence_1d)
-                    vectors_0d = vectorizer_0d.transform()
-                    vectors_1d = vectorizer_1d.transform()
+        Iterates over a grid of parameter values, computing entropy for each combination and 
+        identifying the combination that maximizes entropy.
 
-                    # 평균 엔트로피 계산
-                    entropy_avg = np.mean(vectors_0d) + np.mean(vectors_1d)
-                    entropies.append(entropy_avg)
-                    logger.info(f"Params: ({x1:.4f}, {x2:.4f}, {x3:.4f}), Average Entropy: {entropy_avg:.4f}")
+        Returns:
+            A tuple containing the best parameters and the maximum entropy achieved.
+        """
+        self.entropy_data = []
+        for x1 in np.linspace(0, 1, self.steps):
+            for x2 in np.linspace(0, 1, self.steps):
+                for x3 in np.linspace(0, 1, self.steps):
+                    converter = GrayscaleConverter(self.dataset, x1=x1, x2=x2, x3=x3)
+                    entropy_calculator = EntropyCalculator(filtration=converter, homology_dimension=self.homology_dimension)
+                    entropies = entropy_calculator.compute()
+                    entropy_avg = sum(np.mean(values) for values in entropies.values())
+                    
+                    self.entropy_data.append(((x1, x2, x3), entropy_avg))
 
-
-                    # 최대 엔트로피 및 최적 파라미터 업데이트
                     if entropy_avg > self.max_entropy:
                         self.max_entropy = entropy_avg
                         self.best_params = (x1, x2, x3)
-                        
-        # 점의 색상을 엔트로피 값에 따라 설정
-        sc = ax.scatter(*np.meshgrid(*[np.linspace(0, 1, num=self.steps)]*3), c=entropies, cmap='viridis')
 
-        
+                    logger.info(f"Params: ({x1:.4f}, {x2:.4f}, {x3:.4f}), Average Entropy: {entropy_avg:.4f}")
+
+        return self.best_params, self.max_entropy
+
+    def visualize_optimization(self):
+        """
+        Visualize the results of the grid search optimization.
+
+        This method plots the entropy values across the parameter space using a 3D scatter plot.
+        """
+        fig, ax = plt.subplots(subplot_kw={'projection': '3d'})
+
+        for (x1, x2, x3), entropy in self.entropy_data:
+            ax.scatter(x1, x2, x3, c=entropy, cmap='viridis')
+
         ax.set_xlabel('X1')
         ax.set_ylabel('X2')
         ax.set_zlabel('X3')
-        plt.colorbar(sc)  # 컬러바 추가
+        plt.colorbar(ax.scatter)
         plt.show()
-        
-        return self.best_params, self.max_entropy
 
 
 class RandomSearch(OptimizationProcess):

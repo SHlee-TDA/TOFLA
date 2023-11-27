@@ -1,112 +1,81 @@
 """
-Module for topological data analysis vectorization.
-
-This module provides the Vectorization class which is responsible for
-transforming dataset samples using topological data analysis techniques,
-and subsequently saving the transformed data.
-
-Author: Seong-Heon Lee (Postech MINDS)
-Date: 19. 10. 23
+This module provides functionality for calculating persistence entropy based on persistence diagrams 
+obtained from topological data analysis (TDA). It includes a class for calculating the persistence entropy 
+of datasets after applying filtration and computing persistence diagrams.
 """
-
-import os
-import time
-import logging
+from typing import List, Union
 
 import numpy as np
 from gudhi.sklearn.cubical_persistence import CubicalPersistence
 from gudhi.representations.vector_methods import Entropy
-from tqdm import tqdm
 
 from .converter import BaseConverter
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
-persistence_0d = CubicalPersistence(
-    homology_dimensions=0,
-    input_type='vertices',
-    homology_coeff_field=2,
-    n_jobs=-1
-)
-
-persistence_1d = CubicalPersistence(
-    homology_dimensions=1,
-    input_type='vertices',
-    homology_coeff_field=2,
-    n_jobs=-1
-)
-
-vectorization = Entropy(mode='scalar')
-
-
-class Vectorization:
+def normalize_persistence_diagram(persistence_diagrams: List[np.ndarray]) -> List[np.ndarray]:
     """
-        A class to perform topological vectorization on datasets.
+    Normalize the persistence diagrams by replacing infinity values with 1.0.
 
-        This class provides functionalities to perform filtration, compute
-        persistence diagrams, and vectorize the diagrams, and finally save
-        the vectorized data.
+    Args:
+        persistence_diagrams: List of numpy arrays representing persistence diagrams.
 
-        Attributes:
-            dataset: A PyTorch Dataset.
-            filtration: A filtration converter based on BaseConverter.
-            persistence: Persistence diagram computation module.
-            vectorization: Diagram vectorization module.
-            vectors (np.ndarray, optional): Stores the vectorized data after transformation.
+    Returns:
+        List of normalized persistence diagrams.
     """
-    def __init__(self,
-                dataset,
-                filtration: BaseConverter,
-                persistence = persistence_1d,
-                vectorization = vectorization
-                ):
+    return [np.where(persistence_pair == np.inf, 1.0, persistence_pair) for persistence_pair in persistence_diagrams]
 
-        """
-        Initialize the Vectorization instance.
+def calculate_PD_for_dim(images: Union[np.ndarray, List[np.ndarray]], dimension: int) -> List[np.ndarray]:
+    """
+    Calculate the persistence diagrams for a given homology dimension.
 
-        Args:
-            dataset: A PyTorch Dataset.
-            filtration (BaseConverter): Filtration method to convert samples.
-            persistence: Persistence diagram computation module.
-            vectorization: Diagram vectorization module.
-        """
-        self.dataset = dataset
+    Args:
+        images: List of images or a single numpy array representing images.
+        dimension: The homology dimension to compute persistence diagrams for.
+
+    Returns:
+        List of persistence diagrams for the given dimension.
+    """
+    return normalize_persistence_diagram(
+        CubicalPersistence(homology_dimensions=dimension, input_type='vertices', homology_coeff_field=2, n_jobs=-1).fit_transform(images)
+    )
+
+
+class EntropyCalculator:
+    """
+    A class to compute entropy from persistence diagrams for a given dataset.
+
+    This class handles the process of filtration, computing persistence diagrams,
+    and calculating the entropy of these diagrams.
+
+    Attributes:
+        filtration (BaseConverter): An instance of BaseConverter for data filtration.
+        homology_dimension (Union[int, List[int]]): Homology dimensions to consider.
+    """
+    def __init__(self, filtration: BaseConverter, homology_dimension: Union[int, List[int]]) -> None:
         self.filtration = filtration
-        if filtration.dataset is not dataset:
-            self.filtration.dataset = self.dataset
-        self.persistence = persistence
-        self.vectorization = vectorization
-        self.vectors = None
+        self.dataset = self.filtration.dataset
+        self.homology_dimension = homology_dimension
+        self.entropy = None
 
-    def transform(self) -> np.ndarray:
+    def compute(self) -> Union[dict, None]:
         """
-        Transform dataset samples using TDA techniques.
-
-        This method performs the filtration, computes persistence diagrams,
-        and vectorizes the diagrams.
+        Perform the computation of entropy for the dataset.
 
         Returns:
-            np.ndarray: The vectorized data.
+            A dictionary of entropy values keyed by homology dimensions, 
+            or None if computation is not possible.
         """
-        start_time = time.time()
-
-        # Step 1 : Convert sample to filtered image
-        #logger.info("Starting filtration...")
         filtered_dataset = self.filtration.convert_dataset()
-        filtered_images = np.array([image[0].numpy() for image in filtered_dataset])
-        
-        # Step 2 : Compute Persistence Diagrams
-        #logger.info("Computing persistence diagrams...")
-        persistence_diagrams = self.persistence.fit_transform(filtered_images)
-        normalized_diagrams = [np.where(arr == np.inf, 1.0, arr) for arr in persistence_diagrams]
-        
-        # Step 3 : Vectorize Persistence Diagrams.
-        #logger.info("Vectorizing persistence diagrams")
-        vectors = self.vectorization.fit_transform(normalized_diagrams)
-        self.vectors = vectors
-        
-        end_time = time.time()
-        #logger.info(f"Total transformation time: {end_time - start_time} seconds")
-        return vectors
+        filtered_images = np.array([image.numpy() for image in filtered_dataset])
 
+        persistence_diagrams = {}
+        if isinstance(self.homology_dimension, int):
+            persistence_diagrams[f'dim{self.homology_dimension}'] = calculate_PD_for_dim(filtered_images, self.homology_dimension)
+        elif isinstance(self.homology_dimension, list):
+            for dim in self.homology_dimension:
+                persistence_diagrams[f'dim{dim}'] = calculate_PD_for_dim(filtered_images, dim)
+        else:
+            raise TypeError("Homology dimension must be an integer or a list of integers")
+
+        self.entropy = {dim: Entropy('scalar').fit_transform(pd) for dim, pd in persistence_diagrams.items()}
+        return self.entropy

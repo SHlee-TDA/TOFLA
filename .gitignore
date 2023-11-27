@@ -52,6 +52,7 @@ coverage.xml
 cover/
 tests/
 examples/data/*
+examples/examples.ipynb
 
 # Translations
 *.mo
