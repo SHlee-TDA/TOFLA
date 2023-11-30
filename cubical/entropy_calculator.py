@@ -36,7 +36,10 @@ def calculate_PD_for_dim(images: Union[np.ndarray, List[np.ndarray]], dimension:
         List of persistence diagrams for the given dimension.
     """
     return normalize_persistence_diagram(
-        CubicalPersistence(homology_dimensions=dimension, input_type='vertices', homology_coeff_field=2, n_jobs=-1).fit_transform(images)
+        CubicalPersistence(homology_dimensions=dimension, 
+                           input_type='vertices', 
+                           homology_coeff_field=2, 
+                           n_jobs=-1).fit_transform(images)
     )
 
 
