@@ -5,7 +5,7 @@
 TOFLA follows a structured approach to optimize the conversion of RGB images to grayscale for effective TDA:
 
 1. **Linear Grayscale Conversion**: Converts RGB images to grayscale using a linear model: 
-        $ Y = x_1 \times R + x_2 \times G + x_3 \times B $
+        $Y = x_1 \times R + x_2 \times G + x_3 \times B$
     ,where $x_1, x_2$ and $x_3$ are parameters to be optimized. 
 2. **Filtration**: Applies the grayscale conversion to create filtered images, leading to the construction of cubical complexes.
 3. **Persistence Diagram Computation**: Calculates persistence diagrams from these cubical complexes to encode topological features.
